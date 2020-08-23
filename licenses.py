@@ -29,7 +29,7 @@ import shutil
 import sys
 
 
-def export_licenses(export_folder, thirdpartylibs, build_dir):
+def export_used_licenses(export_folder, thirdpartylibs, build_dir):
     '''Exporting the licenses of the used 3rd-party libraries to
     the :export_folder: folder
 
@@ -298,4 +298,4 @@ if __name__ == '__main__':
     if fix is not None:
         fix_3rdpartylib_paths(thirdparty_libs, fix[0], fix[1])
 
-    export_licenses(args.output, thirdparty_libs, args.build)
+    export_used_licenses(args.output, thirdparty_libs, args.build)

@@ -49,7 +49,7 @@ def export_used_licenses(export_folder, thirdpartylibs, build_dir):
     libs = {Library(lib_attrs) for lib_attrs in thirdpartylibs}
     makefile_name = 'Makefile' # Linux, gcc
     if sys.platform.startswith('win'):
-        makefile_name = 'Makefile.Release' # Win, msvc
+        makefile_name = 'Makefile*Release' # Win, msvc
 
     for mf_path in build_dir.rglob(makefile_name):
         mf = MakeFile(mf_path)

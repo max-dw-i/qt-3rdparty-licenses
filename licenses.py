@@ -29,24 +29,24 @@ import shutil
 import sys
 
 
-def export_used_licenses(export_folder, thirdpartylibs, build_dir):
-    '''Exporting the licenses of the used 3rd-party libraries to
+def export_used_licenses(export_folder, thirdparty_libs, build_dir):
+    '''Exporting the licenses of the used Qt 3rd-party libraries to
     the :export_folder: folder
 
     :param export_folder:   directory where to put the license files in,
-    :param thirdpartylibs:  list containing the Qt 3rd-party libraries with its
+    :param thirdparty_libs: list containing the Qt 3rd-party libraries with its
                             attributes (List[Dict[Attribute, Value]]),
     :param build_dir:       Qt build directory (need because 'Makefile's are
                             analysed to find out what 3rd-party libraries are
                             used in the Qt build)
     '''
 
-    print('Exporting the licenses of the used 3rd-party libraries...')
+    print('Exporting the licenses of the used Qt 3rd-party libraries...')
 
     export_folder = pathlib.Path(export_folder)
     build_dir = pathlib.Path(build_dir)
 
-    libs = {Library(lib_attrs) for lib_attrs in thirdpartylibs}
+    libs = {Library(lib_attrs) for lib_attrs in thirdparty_libs}
     makefile_name = 'Makefile' # Linux, gcc
     if sys.platform.startswith('win'):
         makefile_name = 'Makefile*Release' # Win, msvc
@@ -62,7 +62,26 @@ def export_used_licenses(export_folder, thirdpartylibs, build_dir):
                     break
 
 
-def fix_3rdpartylib_paths(thirdpartylibs, prev_src_dir, src_dir):
+def export_all_licenses(export_folder, thirdparty_libs):
+    '''Exporting the licenses of all Qt 3rd-party libraries to
+    the :export_folder: folder
+
+    :param export_folder:   directory where to put the license files in,
+    :param thirdparty_libs: list containing the Qt 3rd-party libraries with its
+                            attributes (List[Dict[Attribute, Value]])
+    '''
+
+    print('Exporting the licenses of all Qt 3rd-party libraries...')
+
+    export_folder = pathlib.Path(export_folder)
+
+    libs = {Library(lib_attrs) for lib_attrs in thirdparty_libs}
+    for lib in libs:
+        new_license_dir = export_folder / lib.id()
+        lib.export_license_file(new_license_dir)
+
+
+def fix_3rdpartylib_paths(thirdparty_libs, prev_src_dir, src_dir):
     '''Change the 'LicenseFile' and 'Path' attributes so they point to the
     correct libraries in :src_dir: (e.g. the 'Path' attribute is
     '/home/jack/prev_qt_source/lib', :src_dir: is '/home/alex/new_qt_source'
@@ -71,7 +90,7 @@ def fix_3rdpartylib_paths(thirdpartylibs, prev_src_dir, src_dir):
     generate the file with 3rd-party library attributes once and then use
     it in different places
 
-    :param thirdpartylibs:  list containing the Qt 3rd-party libraries with its
+    :param thirdparty_libs: list containing the Qt 3rd-party libraries with its
                             attributes (List[Dict[Attribute, Value]]),
     :param prev_src_folder: previous Qt source folder
                             (e.g. 'prev_qt_source'),
@@ -82,7 +101,7 @@ def fix_3rdpartylib_paths(thirdpartylibs, prev_src_dir, src_dir):
     src_dir = pathlib.Path(src_dir)
     prev_src_dir = pathlib.Path(prev_src_dir)
 
-    for lib in thirdpartylibs:
+    for lib in thirdparty_libs:
         for path_attr in ['LicenseFile', 'Path']:
             path = lib[path_attr]
             if not path:
@@ -241,16 +260,17 @@ if __name__ == '__main__':
         "\t'qtchooser -run-tool=qtattributionsscanner -qt=5 --output-format "
         "'json' -o 3rdpartylibs.json /path/to/Qt5/sources'\n(Qt5 with the "
         "'qtattributionsscanner' tool must be installed or built, obviously). "
-        "The script has an option to fix the 'LicenseFile' and 'Path' "
-        "attributes of the '3rdpartylibs.json' so they point to the correct "
-        "libraries in the Qt5 source directory (e.g. the 'Path' attribute is "
-        "'/home/jack/previous_qt_source/lib', the Qt5 source directory is "
-        "'/home/alex/new_qt_source' then the new 'Path' attribute will be "
-        "'/home/alex/new_qt_source/lib'. It can be useful if we want to "
-        " generate the '3rdpartylibs.json' once and then use it in different "
-        "places."
+        "The license files of all 3rd-party libraries can be exported (if "
+        "needed). The script has an option to fix the 'LicenseFile' and "
+        "'Path' attributes of the '3rdpartylibs.json' so they point to the "
+        "correct libraries in the Qt5 source directory (e.g. the 'Path' "
+        "attribute is '/home/jack/previous_qt_source/lib', the Qt5 source "
+        "directory is '/home/alex/new_qt_source' then the new 'Path' "
+        "attribute will be '/home/alex/new_qt_source/lib'. It can be useful "
+        "if we want to generate the '3rdpartylibs.json' once and then use it "
+        "in different places."
     )
-    EPILOG = "The '-o', '-a', '-b' options are required, '-f' - optional"
+    EPILOG = "The '-o', '-a' options are required, '-b', '-f' - optional"
 
     parser = argparse.ArgumentParser(
         prog=NAME,
@@ -275,8 +295,8 @@ if __name__ == '__main__':
         '-b',
         '--build',
         metavar='BUILD_DIR',
-        help='path to the Qt build directory',
-        required=True,
+        help=('path to the Qt build directory (if not provided, the license '
+              'files of all 3rd-party Qt libraries will be exported)'),
     )
     parser.add_argument(
         '-f',
@@ -298,4 +318,9 @@ if __name__ == '__main__':
     if fix is not None:
         fix_3rdpartylib_paths(thirdparty_libs, fix[0], fix[1])
 
-    export_used_licenses(args.output, thirdparty_libs, args.build)
+    export_dir = args.output
+    build_dir = args.build
+    if build_dir is None:
+        export_all_licenses(export_dir, thirdparty_libs)
+    else:
+        export_used_licenses(export_dir, thirdparty_libs, build_dir)

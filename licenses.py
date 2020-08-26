@@ -24,12 +24,14 @@ DEALINGS IN THE SOFTWARE.
 
 import argparse
 import json
+import os
 import pathlib
 import shutil
 import sys
 
 
-def export_used_licenses(export_folder, thirdparty_libs, build_dir):
+def export_used_licenses(export_folder, thirdparty_libs, build_dir,
+                         src_dir=None):
     '''Exporting the licenses of the used Qt 3rd-party libraries to
     the :export_folder: folder
 
@@ -38,20 +40,36 @@ def export_used_licenses(export_folder, thirdparty_libs, build_dir):
                             attributes (List[Dict[Attribute, Value]]),
     :param build_dir:       Qt build directory (need because 'Makefile's are
                             analysed to find out what 3rd-party libraries are
-                            used in the Qt build)
+                            used in the Qt build),
+    :param src_dir:         separate and clean Qt source directory (optional,
+                            if a 'non-shadow build' is used, need to exclude
+                            any premade 'Makefile's from the analysis; if a
+                            'shadow built' is used, there'll not be any in
+                            the build directory)
     '''
 
     print('Exporting the licenses of the used Qt 3rd-party libraries...')
 
     export_folder = pathlib.Path(export_folder)
     build_dir = pathlib.Path(build_dir)
+    src_dir = '' if src_dir is None else pathlib.Path(src_dir)
 
     libs = {Library(lib_attrs) for lib_attrs in thirdparty_libs}
     makefile_name = 'Makefile' # Linux, gcc
+
+    # Exclude the premade 'MakeFile's
+    exclude_mf = tuple()
+    if src_dir:
+        exclude_mf = tuple([str(mf_path.relative_to(src_dir))
+                            for mf_path in src_dir.rglob(makefile_name)])
+
     if sys.platform.startswith('win'):
         makefile_name = 'Makefile*Release' # Win, msvc
 
     for mf_path in build_dir.rglob(makefile_name):
+        if str(mf_path).endswith(exclude_mf):
+            continue
+
         mf = MakeFile(mf_path)
         for lib in libs.copy():
             for sig in lib.signatures:
@@ -213,6 +231,8 @@ class MakeFile:
     '''
 
     def __init__(self, file_path):
+        self._file_path = pathlib.Path(file_path)
+
         with open(file_path, 'r') as f:
             self._data = f.read()
 
@@ -238,13 +258,27 @@ class MakeFile:
             while data[end] not in separators:
                 end += 1
 
-            contender = data[start+1:end]
+            contender = self._sanitise(data[start+1:end])
             if contender.startswith(str(path)):
                 return True
 
             i = data.find(name, end+1)
 
         return False
+
+    def _sanitise(self, s):
+        if s[-1] == ':':
+            return ''
+
+        for prefix in ('-I', '$(INSTALL_ROOT)'):
+            if s.startswith(prefix):
+                s = s[len(prefix):]
+
+        cwd = pathlib.Path.cwd()
+        os.chdir(self._file_path.parent)
+        path = pathlib.Path(s).resolve()
+        os.chdir(cwd)
+        return str(path)
 
 
 if __name__ == '__main__':
@@ -256,26 +290,58 @@ if __name__ == '__main__':
         "folder of your choice. To do that, it analyses the makefiles in the "
         "build directory ('MakeFile' on Linux, gcc; 'MakeFile.Release' on "
         "Windows, MSVC). It also needs the file containing the attributes of "
-        "the Qt 3rd-party libraries. It can be generated with the command:\n"
-        "\t'qtchooser -run-tool=qtattributionsscanner -qt=5 --output-format "
-        "'json' -o 3rdpartylibs.json /path/to/Qt5/sources'\n(Qt5 with the "
-        "'qtattributionsscanner' tool must be installed or built, obviously). "
+        "the Qt 3rd-party libraries. It can be generated with the command:\n\n"
+        ">> 'qtchooser -run-tool=qtattributionsscanner -qt=5 --output-format "
+        "'json' -o 3rdpartylibs.json /path/to/Qt5/sources'\n\n"
+        "(Qt5 with the 'qtattributionsscanner' tool must be installed or "
+        "built, obviously).\n"
         "The license files of all 3rd-party libraries can be exported (if "
-        "needed). The script has an option to fix the 'LicenseFile' and "
-        "'Path' attributes of the '3rdpartylibs.json' so they point to the "
-        "correct libraries in the Qt5 source directory (e.g. the 'Path' "
-        "attribute is '/home/jack/previous_qt_source/lib', the Qt5 source "
-        "directory is '/home/alex/new_qt_source' then the new 'Path' "
-        "attribute will be '/home/alex/new_qt_source/lib'. It can be useful "
-        "if we want to generate the '3rdpartylibs.json' once and then use it "
-        "in different places."
+        "needed).\n"
+        "The script has an option to fix the 'LicenseFile' and 'Path' "
+        "attributes of the '3rdpartylibs.json' so they point to the correct "
+        "libraries in the Qt5 source directory (e.g. the 'Path' attribute is "
+        "'/home/jack/previous_qt_source/lib', the Qt5 source directory is "
+        "'/home/alex/new_qt_source' then the new 'Path' attribute will be "
+        "'/home/alex/new_qt_source/lib'. It can be useful if we want to "
+        "generate the '3rdpartylibs.json' once and then use it in "
+        "different places.\n"
+        "If Qt was built as a 'shadow build', then fixing the paths (-f) will "
+        "need the Qt source directory as the second argument (since the "
+        "source and build directories are separate). If Qt was built as a "
+        "'non-shadow build', then fixing the paths will need the build "
+        "directory as the second argument (since the source and build "
+        "directories are the same thing). Also for a 'non-shadow build' we "
+        "need to point to a clean Qt source directory (-s) to exclude any "
+        "premade 'Makefile's from the analysis.\n\n"
+        "Examples:\n\n"
+        "- License files export directory - '/licenses'\n"
+        "- File with 3rd-party libraries attributes - '3rdpartylibs.json'\n"
+        "- Previous Qt source directory (from '3rdpartylibs.json') - "
+        "'/prev/Qt/source/dir'\n"
+        "- Qt source directory - '/Qt/source/dir'\n"
+        "- Qt build directory - '/Qt/build/dir'\n\n"
+        "1. Qt was built as a 'shadow build' and '3rdpartylibs.json' already "
+        "has proper paths (point to '/Qt/source/dir/...'):\n\n"
+        ">> python licenses.py -o /licenses -a 3rdpartylibs.json -b "
+        "/Qt/build/dir\n\n"
+        "2. Qt was built as a 'shadow build' but we'd like to fix the paths "
+        "in '3rdpartylibs.json':\n\n"
+        ">> python licenses.py -o /licenses -a 3rdpartylibs.json -b "
+        "/Qt/build/dir -f /prev/Qt/source/dir /Qt/source/dir\n\n"
+        "3. Qt was built as a 'non-shadow build' and '3rdpartylibs.json' "
+        "already has proper paths:\n\n"
+        ">> python licenses.py -o /licenses -a 3rdpartylibs.json -b "
+        "/Qt/build/dir -s /Qt/source/dir\n\n"
+        "4. Qt was built as a 'non-shadow build' but we'd like to fix the "
+        "paths in '3rdpartylibs.json':\n\n"
+        ">> python licenses.py -o /licenses -a 3rdpartylibs.json -b "
+        "/Qt/build/dir -s /Qt/source/dir -f /prev/Qt/source/dir /Qt/build/dir"
     )
-    EPILOG = "The '-o', '-a' options are required, '-b', '-f' - optional"
 
     parser = argparse.ArgumentParser(
         prog=NAME,
         description=DESCRIPTION,
-        epilog=EPILOG
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
         '-o',
@@ -299,15 +365,23 @@ if __name__ == '__main__':
               'files of all 3rd-party Qt libraries will be exported)'),
     )
     parser.add_argument(
+        '-s',
+        '--source',
+        metavar='SRC_DIR',
+        help=("path to the clean Qt source directory (must be provided if "
+              "a 'non-shadow build' is used)"),
+    )
+    parser.add_argument(
         '-f',
         '--fix',
         nargs=2,
         metavar=('PREV_SRC_DIR', 'SRC_DIR'),
         help=("fix the library paths, provide the previous Qt5 source "
               "directory (can be found in '3rdpartylibs.json') and the new "
-              "Qt5 directory, for example, "
-              "-f /home/jack/previous_qt_source /home/alex/new_qt_source "
-              "(see the script description)"),
+              "Qt5 source directory, for example, "
+              "-f /home/jack/previous_qt_source /home/alex/new_qt_source; "
+              "if 'non-shadow build' is used, the new Qt5 source directory "
+              "is the build directory"),
     )
     args = parser.parse_args()
 
@@ -323,4 +397,5 @@ if __name__ == '__main__':
     if build_dir is None:
         export_all_licenses(export_dir, thirdparty_libs)
     else:
-        export_used_licenses(export_dir, thirdparty_libs, build_dir)
+        src_dir = args.source
+        export_used_licenses(export_dir, thirdparty_libs, build_dir, src_dir)

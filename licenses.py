@@ -51,25 +51,10 @@ def export_used_licenses(export_folder, thirdparty_libs, build_dir,
     print('Exporting the licenses of the used Qt 3rd-party libraries...')
 
     export_folder = pathlib.Path(export_folder)
-    build_dir = pathlib.Path(build_dir)
-    src_dir = '' if src_dir is None else pathlib.Path(src_dir)
 
     libs = {Library(lib_attrs) for lib_attrs in thirdparty_libs}
-    makefile_name = 'Makefile' # Linux, gcc
 
-    # Exclude the premade 'MakeFile's
-    exclude_mf = tuple()
-    if src_dir:
-        exclude_mf = tuple([str(mf_path.relative_to(src_dir))
-                            for mf_path in src_dir.rglob(makefile_name)])
-
-    if sys.platform.startswith('win'):
-        makefile_name = 'Makefile*Release' # Win, msvc
-
-    for mf_path in build_dir.rglob(makefile_name):
-        if str(mf_path).endswith(exclude_mf):
-            continue
-
+    for mf_path in MakeFile.search(build_dir, src_dir=src_dir):
         mf = MakeFile(mf_path)
         for lib in libs.copy():
             for sig in lib.signatures:
@@ -279,6 +264,36 @@ class MakeFile:
         path = pathlib.Path(s).resolve()
         os.chdir(cwd)
         return str(path)
+
+    @staticmethod
+    def search(build_dir, src_dir=None):
+        '''Search 'Makefiles' in a Qt build directory
+
+        :param build_dir:   Qt build directory,
+        :param src_dir:     separate and clean Qt source directory (optional,
+                            if need to exclude any premade 'Makefile's),
+        :return:            list with the paths of the found 'Makefile's
+        '''
+
+        makefile_name = 'Makefile' # Linux, gcc
+
+        # Exclude the premade 'Makefile's
+        exclude_mfs = []
+        if src_dir is not None:
+            src_dir = pathlib.Path(src_dir)
+            for mf_path in src_dir.rglob(makefile_name):
+                path_tail = str(mf_path.relative_to(src_dir))
+                exclude_mfs.append(path_tail)
+
+        exclude_mfs = tuple(exclude_mfs)
+
+        if sys.platform.startswith('win'):
+            makefile_name = 'Makefile*Release' # Win, msvc
+
+        build_dir = pathlib.Path(build_dir)
+        makefiles = [mf_path for mf_path in build_dir.rglob(makefile_name)
+                     if not str(mf_path).endswith(exclude_mfs)]
+        return makefiles
 
 
 if __name__ == '__main__':

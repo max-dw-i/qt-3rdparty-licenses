@@ -176,7 +176,13 @@ class Library:
         elif lib_path.suffix: # e.g. 'grayraster'
             lib_filepaths = [lib_path]
         else: # e.g. 'angle'
-            suffixes = ('.h', '.hh', '.c', '.cpp', '.cc', '.jar')
+            suffixes = (
+                '.h', '.hh',
+                '.c', '.cpp', '.cc',
+                '.jar', # 'gradle', NEED TO BE TESTED (ANDROID)
+                '.S', # 'pixman', NEED TO BE TESTED (ARM NEON)
+                '.ttf' # fonts for WASM, NEED TO BE TESTED
+            )
             lib_filepaths = [filepath for filepath in lib_path.rglob('*')
                              if filepath.suffix in suffixes]
 

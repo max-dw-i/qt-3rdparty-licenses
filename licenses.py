@@ -69,12 +69,18 @@ def libraries_factory(thirdparty_libs):
 
     :param thirdparty_libs: list containing the Qt 3rd-party libraries with its
                             attributes (List[Dict[Attribute, Value]]),
-    :return: Set[Library]
+    :return: Set[Union[Library, WebgradientsLib]]
     '''
 
     libs = set()
     for lib_attrs in thirdparty_libs:
-        libs.add(Library(lib_attrs))
+        id = lib_attrs['Id']
+        if id == 'webgradients':
+            lib = WebgradientsLib(lib_attrs)
+        else:
+            lib = Library(lib_attrs)
+
+        libs.add(lib)
     return libs
 
 
@@ -235,6 +241,20 @@ class Library:
 
     def __hash__(self):
         return hash(self.id())
+
+
+class WebgradientsLib(Library):
+    '''Represent the 'webgradients' 3rd-party library'''
+
+    @property
+    def signatures(self):
+        '''Return the 'webgradients.binaryjson' path'''
+
+        file_path = super().signatures[0]
+        parts = file_path.split('.')
+        # Not '.css' but premade '.binaryjson' is used in compilation
+        parts[-1] = 'binaryjson'
+        return ['.'.join(parts)]
 
 
 class Makefile:

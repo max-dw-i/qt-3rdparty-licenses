@@ -52,17 +52,30 @@ def export_used_licenses(export_folder, thirdparty_libs, build_dir,
 
     export_folder = pathlib.Path(export_folder)
 
-    libs = {Library(lib_attrs) for lib_attrs in thirdparty_libs}
+    libs = libraries_factory(thirdparty_libs)
 
-    for mf_path in MakeFile.search(build_dir, src_dir=src_dir):
-        mf = MakeFile(mf_path)
+    for mf_path in Makefile.search(build_dir, src_dir=src_dir):
+        mf = Makefile(mf_path)
         for lib in libs.copy():
-            for sig in lib.signatures:
-                if mf.has_path(sig):
-                    new_license_dir = export_folder / lib.id()
-                    lib.export_license_file(new_license_dir)
-                    libs.remove(lib)
-                    break
+            if lib.used(mf):
+                new_license_dir = export_folder / lib.id()
+                lib.export_license_file(new_license_dir)
+                libs.remove(lib)
+
+
+def libraries_factory(thirdparty_libs):
+    '''Return a set of 'library' objects based on the attributes from
+    :thirdparty_libs:
+
+    :param thirdparty_libs: list containing the Qt 3rd-party libraries with its
+                            attributes (List[Dict[Attribute, Value]]),
+    :return: Set[Library]
+    '''
+
+    libs = set()
+    for lib_attrs in thirdparty_libs:
+        libs.add(Library(lib_attrs))
+    return libs
 
 
 def export_all_licenses(export_folder, thirdparty_libs):
@@ -126,6 +139,18 @@ class Library:
     def __init__(self, lib_data):
         self._data = lib_data
         self._signatures = []
+
+    def used(self, makefile):
+        '''Return True if any of the library files is found in :makefile:,
+        False - otherwise
+
+        :param makefile: Makefile object
+        '''
+
+        for sig in self.signatures:
+            if makefile.has_path(sig):
+                return True
+        return False
 
     @property
     def signatures(self):
@@ -212,20 +237,20 @@ class Library:
         return hash(self.id())
 
 
-class MakeFile:
-    '''Represent a MakeFile used in a Qt build process
+class Makefile:
+    '''Represent a Makefile used in a Qt build process
 
-    :param file_path: path to the MakeFile
+    :param file_path: path to the Makefile
     '''
 
     def __init__(self, file_path):
-        self._file_path = pathlib.Path(file_path)
+        self.file_path = pathlib.Path(file_path)
 
         with open(file_path, 'r') as f:
             self._data = f.read()
 
     def has_path(self, path):
-        '''Check if the MakeFile uses the :path: path in the Qt build process
+        '''Check if the Makefile uses :path: in the Qt build process
 
         :param path: path to some file,
         :return: True - the path has been found, False - otherwise
@@ -267,7 +292,7 @@ class MakeFile:
                 s = s[len(prefix):]
 
         cwd = pathlib.Path.cwd()
-        os.chdir(self._file_path.parent)
+        os.chdir(self.file_path.parent)
         path = pathlib.Path(s).resolve()
         os.chdir(cwd)
         return str(path)
@@ -310,7 +335,7 @@ if __name__ == '__main__':
         "This script finds all the 3rd-party libraries that were used in a Qt "
         "build process and export the corresponding 'LICENSE' files into the "
         "folder of your choice. To do that, it analyses the makefiles in the "
-        "build directory ('MakeFile' on Linux, gcc; 'MakeFile.Release' on "
+        "build directory ('Makefile' on Linux, gcc; 'Makefile.Release' on "
         "Windows, MSVC). It also needs the file containing the attributes of "
         "the Qt 3rd-party libraries. It can be generated with the command:\n\n"
         ">> 'qtchooser -run-tool=qtattributionsscanner -qt=5 --output-format "

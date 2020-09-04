@@ -60,6 +60,7 @@ def export_used_licenses(export_folder, thirdparty_libs, build_dir,
             if lib.used(mf):
                 new_license_dir = export_folder / lib.id()
                 lib.export_license_file(new_license_dir)
+                lib.export_copyright_file(new_license_dir)
                 libs.remove(lib)
 
 
@@ -101,6 +102,7 @@ def export_all_licenses(export_folder, thirdparty_libs):
     for lib in libs:
         new_license_dir = export_folder / lib.id()
         lib.export_license_file(new_license_dir)
+        lib.export_copyright_file(new_license_dir)
 
 
 def fix_3rdpartylib_paths(thirdparty_libs, prev_src_dir, src_dir):
@@ -210,6 +212,11 @@ class Library:
 
         return self._data['LicenseFile']
 
+    def copyright(self):
+        '''Return the library copyright information'''
+
+        return self._data['Copyright']
+
     def export_license_file(self, export_folder):
         '''Copy the license file into :export_folder:
 
@@ -232,6 +239,20 @@ class Library:
         license_file_path = export_folder / 'Public Domain'
         with open(license_file_path, 'w') as f:
             f.write(self._data['Copyright'])
+
+    def export_copyright_file(self, export_folder):
+        '''Copy the copyright file into :export_folder:
+
+        :param export_folder: folder to copy the copyright file into
+        '''
+
+        if not export_folder.exists():
+            export_folder.mkdir(parents=True)
+
+        copyright_file = export_folder / 'COPYRIGHT'
+        with open(copyright_file, 'w') as f:
+            copyright_info = self.copyright()
+            f.write(copyright_info)
 
     def id(self):
         '''Return the library identificator (unique, from the "Id"

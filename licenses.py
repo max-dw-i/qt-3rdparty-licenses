@@ -196,9 +196,10 @@ class Library:
         none, an empty list is returned
         '''
 
-        files = self._data['Files'].split(' ')
-        files = [name.rstrip(',') for name in files]
-        return files
+        files = self._data['Files']
+        if not files:
+            return []
+        return [name.rstrip(',') for name in files.split(' ')]
 
     def path(self):
         '''Return the library path (from the "Path" attribute)'''
@@ -328,7 +329,7 @@ class Makefile:
                 end += 1
 
             contender = self._sanitise(data[start+1:end])
-            if contender.startswith(str(path)):
+            if contender == str(path):
                 return True
 
             i = data.find(name, end+1, search_area_end)
